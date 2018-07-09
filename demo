@@ -1,0 +1,491 @@
+'use strict';
+
+var videoLoop = function () {
+    var _ref = _asyncToGenerator(regeneratorRuntime.mark(function _callee(t) {
+        var dt;
+        return regeneratorRuntime.wrap(function _callee$(_context) {
+            while (1) {
+                switch (_context.prev = _context.next) {
+                    case 0:
+                        dt = t - lastTime;
+                        _context.next = 3;
+                        return update(dt);
+
+                    case 3:
+
+                        lastTime = t;
+                        if (scrollY > innerHeight * 0.8) {
+                            setTimeout(videoLoop, 1000);
+                        } else {
+                            lastFrame = requestAnimationFrame(videoLoop);
+                        }
+
+                    case 5:
+                    case 'end':
+                        return _context.stop();
+                }
+            }
+        }, _callee, this);
+    }));
+
+    return function videoLoop(_x) {
+        return _ref.apply(this, arguments);
+    };
+}();
+
+var squeezenet = function () {
+    var _ref2 = _asyncToGenerator(regeneratorRuntime.mark(function _callee2() {
+        var keras_model, keras_model_meta, buffer, network, compiled;
+        return regeneratorRuntime.wrap(function _callee2$(_context2) {
+            while (1) {
+                switch (_context2.prev = _context2.next) {
+                    case 0:
+                        _context2.next = 2;
+                        return loadJSON('models/rps.json');
+
+                    case 2:
+                        keras_model = _context2.sent;
+                        _context2.next = 5;
+                        return loadJSON('models/rps_metadata.json');
+
+                    case 5:
+                        keras_model_meta = _context2.sent;
+                        _context2.next = 8;
+                        return loadBuffer('models/rps-weights.buf');
+
+                    case 8:
+                        buffer = _context2.sent;
+
+                        // var buffer = await loadBuffer('models/rps-0.9575_weights.buf');
+
+                        console.log(keras_model, keras_model_meta, buffer);
+
+                        // var image = (await loadArrayFromURL('data/cat-227x227x3')).transpose(1, 0, 2);
+
+                        // ;(new Tensor(gl, image)).show({ offset: 0.5, scale: 1/256, flipY: true })
+
+
+                        network = import_keras_network(keras_model, keras_model_meta, buffer);
+
+                        console.log(network);
+                        console.log(network.splice(-2, 2)); // cut off the last two layers, do that in JS
+
+                        _context2.next = 15;
+                        return compile(gl, network, { input_1: zeros([227, 227, 3]) });
+
+                    case 15:
+                        compiled = _context2.sent;
+
+                        C = compiled;
+
+                        // await destroy(gl, compiled)
+
+                    case 17:
+                    case 'end':
+                        return _context2.stop();
+                }
+            }
+        }, _callee2, this);
+    }));
+
+    return function squeezenet() {
+        return _ref2.apply(this, arguments);
+    };
+}();
+
+var update = function () {
+    var _ref3 = _asyncToGenerator(regeneratorRuntime.mark(function _callee3(dt) {
+        var compiled, videox, vwidth, im, data, results, imagedata, factor;
+        return regeneratorRuntime.wrap(function _callee3$(_context3) {
+            while (1) {
+                switch (_context3.prev = _context3.next) {
+                    case 0:
+                        // await model.ready()
+
+                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                        compiled = C;
+
+                        // var videox = window.game_state === 'playing'
+                        //     ? 0
+                        //     : canvas.width / 4
+
+                        videox = 0;
+
+
+                        if (hasVideo) {
+
+                            ctx.save();
+                            ctx.translate(canvas.width / 2, 0);
+                            ctx.scale(-1, 1);
+
+                            vwidth = canvas.height / video.videoHeight * video.videoWidth;
+
+                            ctx.drawImage(video, (video.videoWidth - video.videoHeight) / 2, 0, video.videoHeight, video.videoHeight, videox, 0, canvas.height, canvas.height);
+                            ctx.restore();
+                        }
+
+                        im = ctx.getImageData(videox, 0, 227, 227);
+                        _context3.next = 7;
+                        return run(gl, compiled, { input_1: preprocess_input(im) });
+
+                    case 7:
+                        data = compiled.info['global_average_pooling2d_1'].output.read().data;
+                        results = softmax(Array.from(data));
+                        imagedata = tickerCtx.getImageData(0, 0, ticker.width, ticker.height);
+
+                        tickerCtx.clearRect(0, 0, ticker.width, ticker.height);
+                        tickerCtx.putImageData(imagedata, -1, 0);
+
+                        factor = .6;
+
+                        results.map(function (x) {
+                            return Math.sqrt(x);
+                        }).forEach(function (r, i) {
+                            derps[i] = derps[i] * factor + r * (1 - factor);
+                            tickerCtx.fillStyle = colors[i];
+                            tickerCtx.fillRect(ticker.width - 1, Math.round(ticker.height / 4 * (i + .5 - derps[i] / 2 * 0.9)), 1, Math.round(ticker.height / 4 * (derps[i] * 0.9)));
+                        });
+
+                        person_move = results.indexOf(Math.max.apply(Math, _toConsumableArray(results)));
+                        // person_move = derps.indexOf(Math.max(...derps))
+
+                        avg_person_move = derps.indexOf(Math.max.apply(Math, derps));
+                        if (avg_person_move === 2) {
+                            // rock
+                            if (Date.now() - last_nonrock > 700) {
+                                // woot we're ready to partaaay
+                                window.game_state = 'playing';
+                            }
+                        } else {
+                            last_nonrock = Date.now();
+                        }
+
+                        ctx.font = '15px Arial';
+                        ctx.fillStyle = '#fff';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.fillText('YOU: ' + wins, videox + canvas.width / 4, 20);
+                        ctx.fillText('COMPUTER: ' + losses, videox + canvas.width * 3 / 4, 20);
+
+                        ctx.font = '40px Arial';
+                        ctx.fillStyle = '#fff';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.fillText('vs', videox + canvas.width / 2, canvas.height / 2);
+
+                        ctx.font = '30px Arial';
+                        ctx.fillStyle = '#fff';
+                        ctx.textAlign = 'right';
+                        ctx.textBaseline = 'bottom';
+                        ctx.fillText(MOVES[person_move], videox + canvas.width / 2 - 20, canvas.height - 15);
+
+                        // ctx.font = '100px Arial'
+                        // ctx.fillStyle = '#fff'
+                        // ctx.textAlign = 'center'
+                        // ctx.textBaseline = 'middle'
+                        // ctx.fillText(
+                        //     MOVES[person_move],
+                        //     videox + canvas.width/4 ,
+                        //     canvas.height / 2
+                        // )
+
+                        if (window.game_state === 'playing') {
+                            if (animations[cur_animation](dt)) {
+                                cur_animation++;
+                                if (cur_animation >= animations.length) {
+                                    cur_animation = 0;
+                                    window.game_state = 'waiting';
+                                }
+                                // cur_animation = (cur_animation + 1) % animations.length
+                            }
+                        } else {
+                            ctx.fillStyle = 'white';
+                            ctx.textAlign = 'center';
+                            ctx.textBaseline = 'middle';
+                            ctx.font = '20px Arial';
+                            ctx.fillText('to begin game', canvas.width / 4 * 3, canvas.height / 2 - 15);
+                            ctx.fillText('raise ✊ rock', canvas.width / 4 * 3, canvas.height / 2 + 15);
+                        }
+
+                    case 34:
+                    case 'end':
+                        return _context3.stop();
+                }
+            }
+        }, _callee3, this);
+    }));
+
+    return function update(_x2) {
+        return _ref3.apply(this, arguments);
+    };
+}();
+
+var gotVideo = function () {
+    var _ref4 = _asyncToGenerator(regeneratorRuntime.mark(function _callee4() {
+        return regeneratorRuntime.wrap(function _callee4$(_context4) {
+            while (1) {
+                switch (_context4.prev = _context4.next) {
+                    case 0:
+                        hasVideo = true;
+                        _context4.next = 3;
+                        return squeezenet();
+
+                    case 3:
+                        start();
+
+                    case 4:
+                    case 'end':
+                        return _context4.stop();
+                }
+            }
+        }, _callee4, this);
+    }));
+
+    return function gotVideo() {
+        return _ref4.apply(this, arguments);
+    };
+}();
+
+function _toConsumableArray(arr) { if (Array.isArray(arr)) { for (var i = 0, arr2 = Array(arr.length); i < arr.length; i++) { arr2[i] = arr[i]; } return arr2; } else { return Array.from(arr); } }
+
+function _asyncToGenerator(fn) { return function () { var gen = fn.apply(this, arguments); return new Promise(function (resolve, reject) { function step(key, arg) { try { var info = gen[key](arg); var value = info.value; } catch (error) { reject(error); return; } if (info.done) { resolve(value); } else { return Promise.resolve(value).then(function (value) { step("next", value); }, function (err) { step("throw", err); }); } } return step("next"); }); }; }
+
+var gl = TF.createGL(document.getElementById('glCanvas')),
+    OutputTensor = TF.OutputTensor,
+    Tensor = TF.Tensor,
+    InPlaceTensor = TF.InPlaceTensor,
+    TP = function TP(s) {
+    return function (out, opt) {
+        return TF.Run(s.join(''), out, opt);
+    };
+};
+gl.canvas.width = 227;
+gl.canvas.height = 227;
+
+var canvas = document.getElementById('canvas'),
+    ctx = canvas.getContext('2d');
+
+// var img = new Image;
+// img.src = 'data/sims.png'
+// img.onload = function(){
+//     ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+// }
+
+var lastFrame, lastTime;
+function start() {
+    lastTime = performance.now();
+    videoLoop(lastTime);
+}
+
+var animations = [];
+var cur_animation = 0;
+
+var register_animation = function register_animation(duration, cb) {
+    var left = duration;
+    animations.push(function (dt) {
+        left -= dt;
+        if (left <= 0) {
+            cb(1);
+            left = duration;
+            return true;
+        }
+        cb(1 - left / duration);
+    });
+};
+
+var flash = function flash(text, legend) {
+    return function (r) {
+        var d = r < .5 ? r * 2 : (1 - r) * 2;
+
+        // ctx.fillStyle = 'rgba(255,255,0,'+ d / 2 + .5 +')'
+        ctx.fillStyle = 'rgba(255,255,0,1)';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = '100px Arial';
+
+        ctx.fillText(text, canvas.width / 4 * 3, canvas.height / 2 + d * 40 - 40);
+
+        if (r > .5 || legend) {
+            ctx.font = '20px Arial';
+            ctx.fillText(['', 'scissors', 'paper', 'rock'][text], canvas.width / 4 * 3, canvas.height / 2 + 50);
+        }
+    };
+};
+
+var MOVES = ['👶', '✋', '✊', '✌️'];
+var losers = ['none', 2, 3, 1];
+window.colors = ['#eee', '#48f', 'yellow', 'rgb(255, 123, 0)'];
+
+var computer_move = 0;
+var person_move = 0;
+
+// register_animation(800, flash('Ready...'))
+register_animation(800, flash(3));
+register_animation(800, flash(2));
+register_animation(800, flash(1));
+register_animation(400, function (r) {
+    return flash(1)(r / 2);
+});
+register_animation(0, function () {
+    computer_move = Math.floor(Math.random() * 3) + 1;
+
+    // console.log('computer_move', computer_move)
+    // ctx.textBaseline = 'middle'
+    // tickerCtx.textAlign = 'right'
+    // tickerCtx.fillText(MOVES[person_move], ticker.width, ticker.height / 4 * (person_move + .5) )
+
+});
+register_animation(1000, function (r) {
+    ctx.fillStyle = 'rgba(255,255,255,' + (1 - r) / 2 + ')';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = '100px Arial';
+    ctx.fillStyle = 'rgba(255,255,255,1)';
+    ctx.fillText(MOVES[computer_move], canvas.width / 4 * 3, canvas.height / 2);
+});
+
+var wins = 0,
+    losses = 0,
+    ties = 0;
+var human_move = void 0;
+
+register_animation(0, function () {
+    human_move = avg_person_move;
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = '100px Arial';
+    ctx.fillStyle = 'rgba(255,255,255,1)';
+    ctx.fillText(MOVES[computer_move], canvas.width / 4 * 3, canvas.height / 2);
+
+    // ctx.fillText(MOVES[human_move],canvas.width / 4 ,canvas.height / 2)
+    if (computer_move === losers[human_move]) {
+        wins++;
+        tickerCtx.fillStyle = 'rgba(0,255,0,0.5)';
+    } else if (computer_move != human_move) {
+        losses++;
+        tickerCtx.fillStyle = 'rgba(255,0,0,0.5)';
+    } else {
+        ties++;
+        tickerCtx.fillStyle = 'rgba(0,0,0,0.5)';
+    }
+
+    console.log('wins: ', wins, 'losses: ', losses, 'ties: ', ties);
+
+    tickerCtx.fillRect(ticker.width - 1, 0, 1, ticker.height);
+});
+
+register_animation(1500, function (r) {
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = '100px Arial';
+    ctx.fillStyle = 'rgba(255,255,255,' + (1 - r) + ')';
+    // ctx.fillStyle = '#fff'
+    ctx.fillText(MOVES[computer_move], canvas.width / 4 * 3, canvas.height / 2);
+
+    ctx.font = '70px Arial';
+    ctx.fillStyle = 'rgba(0,0,0,' + Math.min(0.5, 2 * r) + ')';
+    ctx.fillRect(0, (canvas.height - 120) / 2, canvas.width, 120);
+    ctx.fillStyle = 'white';
+    if (computer_move === losers[human_move]) {
+        ctx.fillText('You Win!', canvas.width / 2, canvas.height / 2 - 20);
+
+        ctx.font = '30px Arial';
+        ctx.fillText(MOVES[human_move] + '>' + MOVES[computer_move], canvas.width / 2, canvas.height / 2 + 40);
+    } else if (computer_move != human_move) {
+        ctx.fillText('You Lose!', canvas.width / 2, canvas.height / 2 - 20);
+
+        ctx.font = '30px Arial';
+        ctx.fillText(MOVES[human_move] + '<' + MOVES[computer_move], canvas.width / 2, canvas.height / 2 + 40);
+    } else {
+        ctx.fillText('Tie!', canvas.width / 2, canvas.height / 2 - 20);
+
+        ctx.font = '30px Arial';
+        ctx.fillText(MOVES[human_move] + '=' + MOVES[computer_move], canvas.width / 2, canvas.height / 2 + 40);
+    }
+});
+
+register_animation(1000, function (r) {});
+
+var C;
+var video = document.getElementById('videoElement');
+
+function softmax(arr) {
+    var maxVal = arr[0];
+    for (var i = 1; i < arr.length; i++) {
+        if (arr[i] > maxVal) maxVal = arr[i];
+    }var exp = arr.map(function (k) {
+        return Math.exp(k - maxVal);
+    }),
+        expSum = exp.reduce(function (a, b) {
+        return a + b;
+    });
+    return exp.map(function (k) {
+        return k / expSum;
+    });
+}
+
+function normalize(arr) {
+    var maxVal = arr[0];
+    for (var i = 1; i < arr.length; i++) {
+        if (arr[i] > maxVal) maxVal = arr[i];
+    }return arr.map(function (k) {
+        return k / maxVal;
+    });
+}
+
+var avg_person_move;
+
+function preprocess_input(im) {
+    // data processing
+    // see https://github.com/fchollet/keras/blob/master/keras/applications/imagenet_utils.py
+    var dataTensor = ndarray(new Float32Array(im.data), [im.width, im.height, 4]);
+    var dataProcessedTensor = ndarray(new Float32Array(im.width * im.height * 3), [im.width, im.height, 3]);
+    ndops.subseq(dataTensor.pick(null, null, 2), 103.939);
+    ndops.subseq(dataTensor.pick(null, null, 1), 116.779);
+    ndops.subseq(dataTensor.pick(null, null, 0), 123.68);
+    ndops.assign(dataProcessedTensor.pick(null, null, 0), dataTensor.pick(null, null, 2));
+    ndops.assign(dataProcessedTensor.pick(null, null, 1), dataTensor.pick(null, null, 1));
+    ndops.assign(dataProcessedTensor.pick(null, null, 2), dataTensor.pick(null, null, 0));
+    return dataProcessedTensor;
+}
+
+var derps = [0, 0, 0, 0];
+
+var tickerCtx = ticker.getContext('2d');
+
+ticker.width = 400;
+ticker.height = 200;
+
+var last_nonrock = 0;
+
+var hasVideo = false;
+
+function connectWebcam() {
+    document.querySelector('.demo').classList.remove('waiting');
+    document.querySelector('.demo').classList.add('training');
+
+    if (navigator.mediaDevices) {
+        navigator.mediaDevices.getUserMedia({ video: true }).then(function (mediaStream) {
+            video.srcObject = mediaStream;
+
+            gotVideo();
+        }).catch(function (err) {
+            console.log(err.name + ": " + err.message);
+        }); // always check for errors at the end.    
+    } else {
+        navigator.getUserMedia({ video: true }, function (stream) {
+            video.src = window.URL.createObjectURL(stream);
+            gotVideo();
+        }, function () {
+            console.log('error');
+        });
+    }
+}
+
+if (!(navigator.mediaDevices || navigator.getUserMedia)) {
+    document.body.classList.add('no-gum');
+}

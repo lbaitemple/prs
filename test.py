@@ -8,10 +8,11 @@ with open('rps_metadata.json') as f:
     data = json.load(f)
 
 sz=len(data)
-hf = h5py.File('data.h5', 'w')
+hf = h5py.File('data_95.h5', 'w')
 
 #buff = open("rps9_weights.buf", "rb")
-fdata = np.fromfile("rps_weights.buf", '<f4') #should be little edian (<f4), 
+#fdata = np.fromfile("rps_weights.buf", '<f4') #should be little edian (<f4), 
+fdata = np.fromfile("rps-0.9575_weights.buf", '<f4')
 # big edian won't work >f4 
 
 layername=""
